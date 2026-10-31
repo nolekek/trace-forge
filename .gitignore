@@ -9,6 +9,7 @@ node_modules/
 out/
 build/
 .turbo/
+*.tsbuildinfo
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

@@ -7,6 +7,9 @@ license.workspace = true
 
 [dependencies]
 traceforge-core = { workspace = true }
+traceforge-guard = { workspace = true }
+traceforge-storage = { workspace = true }
+traceforge-hitl = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true }
 reqwest = { workspace = true }
@@ -25,3 +28,5 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }
+tower = { workspace = true }
+http-body-util = { workspace = true }

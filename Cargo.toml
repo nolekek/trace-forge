@@ -15,10 +15,13 @@ repository = "https://github.com/traceforge/traceforge"
 # Internal workspace crates
 traceforge-core = { path = "crates/traceforge-core" }
 traceforge-proxy = { path = "crates/traceforge-proxy" }
+traceforge-guard = { path = "crates/traceforge-guard" }
+traceforge-storage = { path = "crates/traceforge-storage" }
+traceforge-hitl = { path = "crates/traceforge-hitl" }
 
 # Async runtime & Networking
 tokio = { version = "1.40", features = ["full"] }
-axum = { version = "0.8", features = ["tokio", "http1", "http2", "json", "matched-path"] }
+axum = { version = "0.8", features = ["tokio", "http1", "http2", "json", "matched-path", "ws"] }
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "default-tls"] }

@@ -12,6 +12,9 @@ path = "src/main.rs"
 [dependencies]
 traceforge-core = { workspace = true }
 traceforge-proxy = { workspace = true }
+traceforge-guard = { workspace = true }
+traceforge-storage = { workspace = true }
+traceforge-hitl = { workspace = true }
 tokio = { workspace = true }
 clap = { workspace = true }
 reqwest = { workspace = true }

@@ -1,0 +1,23 @@
+[package]
+name = "traceforge-hitl"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+traceforge-core = { workspace = true }
+tokio = { workspace = true }
+axum = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+futures-util = { workspace = true }
+ulid = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+tracing-subscriber = { workspace = true }
+tower = { workspace = true }
+http-body-util = { workspace = true }

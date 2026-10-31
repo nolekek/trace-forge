@@ -1,14 +1,20 @@
 use std::net::SocketAddr;
 use std::process::ExitCode;
+use std::sync::Arc;
 use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand};
-use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-use traceforge_core::{BudgetConfig, EventKind, TraceEvent, TraceForgeConfig};
+use traceforge_core::{BudgetConfig, TraceForgeConfig};
+use traceforge_guard::budget_limiter::BudgetLimiter;
+use traceforge_guard::evaluator::PolicyEvaluator;
+use traceforge_guard::loop_detector::SemanticLoopDetector;
+use traceforge_guard::policy_types::PolicyLimits;
+use traceforge_hitl::{BreakpointManager, SessionStateMachine, WsHub};
 use traceforge_proxy::ProxyServer;
+use traceforge_storage::{AsyncBatchFlusher, SqliteTraceStore};
 
 #[derive(Parser, Debug)]
 #[command(
@@ -59,9 +65,22 @@ pub struct RunArgs {
     #[arg(long, default_value_t = false, env = "TRACEFORGE_JSON_LOGS")]
     pub json_log: bool,
 
+    /// SQLite telemetry database file path
+    #[arg(
+        long,
+        default_value = ".traceforge/traces.db",
+        env = "TRACEFORGE_DB_PATH"
+    )]
+    pub db_path: String,
+
     /// Maximum spending budget per session in USD
-    #[arg(long, default_value_t = 10.0, env = "TRACEFORGE_MAX_COST")]
-    pub max_cost: f64,
+    #[arg(
+        long,
+        alias = "max-cost",
+        default_value_t = 10.0,
+        env = "TRACEFORGE_MAX_BUDGET"
+    )]
+    pub max_budget: f64,
 
     /// Maximum cumulative token budget per session
     #[arg(long, default_value_t = 100_000, env = "TRACEFORGE_MAX_TOKENS")]
@@ -105,58 +124,37 @@ async fn handle_run(args: RunArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     let mut config = TraceForgeConfig::new(listen_addr, &args.upstream);
     config.budgets = BudgetConfig {
-        max_cost_usd_per_session: args.max_cost,
+        max_cost_usd_per_session: args.max_budget,
         max_tokens_per_session: args.max_tokens,
         ..Default::default()
     };
     config.validate()?;
 
-    // Create async telemetry event channel
-    let (event_tx, mut event_rx) = mpsc::channel::<TraceEvent>(2048);
+    // 1. Initialize SQLite Trace Store
+    info!("Initializing SQLite telemetry store at: {}", args.db_path);
+    let store = SqliteTraceStore::open(&args.db_path)
+        .map_err(|e| format!("Failed to initialize SQLite store at '{}': {}", args.db_path, e))?;
 
-    // Spawn telemetry processor worker
-    tokio::spawn(async move {
-        while let Some(evt) = event_rx.recv().await {
-            match evt.kind {
-                EventKind::ToolCall => {
-                    info!(
-                        session = %evt.session_id,
-                        tool = %evt.payload["tool_name"],
-                        args = %evt.payload["arguments"],
-                        "🚨 Intercepted Tool Call"
-                    );
-                }
-                EventKind::LlmRequest => {
-                    info!(
-                        session = %evt.session_id,
-                        latency_us = evt.latency_us,
-                        cost_usd = evt.cost_usd,
-                        tokens = ?evt.token_usage.map(|u| u.total_tokens),
-                        "📡 LLM Request Completed"
-                    );
-                }
-                EventKind::LlmChunk => {
-                    info!(
-                        session = %evt.session_id,
-                        latency_us = evt.latency_us,
-                        tokens = ?evt.token_usage.map(|u| u.total_tokens),
-                        cost_usd = evt.cost_usd,
-                        chunks = ?evt.payload["chunks_count"],
-                        "⚡ SSE Stream Finished"
-                    );
-                }
-                _ => {
-                    info!(
-                        session = %evt.session_id,
-                        kind = ?evt.kind,
-                        "Telemetry event received"
-                    );
-                }
-            }
-        }
-    });
+    // 2. Initialize Async Batch Telemetry Flusher
+    let flusher = AsyncBatchFlusher::new(Arc::new(store));
 
-    let server = ProxyServer::new(config, Some(event_tx));
+    // 3. Initialize Guard Pipeline and Control Plane
+    let limits = PolicyLimits::new(args.max_budget, args.max_tokens as u64);
+    let budget_limiter = Arc::new(BudgetLimiter::new(limits.clone()));
+    let policy_evaluator = Arc::new(PolicyEvaluator::new().with_limits(limits));
+    let loop_detector = Arc::new(tokio::sync::Mutex::new(SemanticLoopDetector::default()));
+    let breakpoint_manager = Arc::new(BreakpointManager::new());
+    let state_machine = Arc::new(SessionStateMachine::new());
+    let ws_hub = Arc::new(WsHub::new(state_machine, breakpoint_manager.clone()));
+
+    // 4. Initialize Reverse Proxy Server
+    let flusher_clone = flusher.clone();
+    let server = ProxyServer::new(config, Some(flusher))
+        .with_budget_limiter(budget_limiter)
+        .with_policy_evaluator(policy_evaluator)
+        .with_loop_detector(loop_detector)
+        .with_breakpoint_manager(breakpoint_manager)
+        .with_ws_hub(ws_hub);
 
     info!("╔═══════════════════════════════════════════════════════════╗");
     info!("║             🛡️ TraceForge Streaming Guard 🛡️             ║");
@@ -164,15 +162,20 @@ async fn handle_run(args: RunArgs) -> Result<(), Box<dyn std::error::Error>> {
     info!("╠═══════════════════════════════════════════════════════════╣");
     info!("║ Listening on: http://{:<36} ║", listen_str);
     info!("║ Upstream:     {:<44} ║", args.upstream);
+    info!("║ Telemetry DB: {:<44} ║", args.db_path);
     info!("║ Latency SLA:  < 5ms Interception Overhead                 ║");
     info!("╚═══════════════════════════════════════════════════════════╝");
 
     server
-        .run_with_shutdown(async {
+        .run_with_shutdown(async move {
             tokio::signal::ctrl_c()
                 .await
                 .expect("Failed to listen for Ctrl+C signal");
             info!("Received shutdown signal. Gracefully draining connections...");
+            if let Err(e) = flusher_clone.shutdown_and_flush().await {
+                error!("Error flushing telemetry during shutdown: {:?}", e);
+            }
+            info!("All telemetry flushed successfully. Goodbye!");
         })
         .await?;
 
@@ -244,6 +247,10 @@ mod tests {
             "--json-log",
             "--max-cost",
             "25.5",
+            "--db-path",
+            "/tmp/test.db",
+            "--max-tokens",
+            "50000",
         ];
 
         let cli = Cli::try_parse_from(args).expect("parse cli args");
@@ -252,8 +259,28 @@ mod tests {
                 assert_eq!(run_args.port, 9090);
                 assert_eq!(run_args.upstream, "https://mock.llm/v1");
                 assert!(run_args.json_log);
-                assert!((run_args.max_cost - 25.5).abs() < 1e-6);
+                assert!((run_args.max_budget - 25.5).abs() < 1e-6);
+                assert_eq!(run_args.db_path, "/tmp/test.db");
+                assert_eq!(run_args.max_tokens, 50000);
                 assert_eq!(run_args.host, "0.0.0.0");
+            }
+            _ => panic!("Expected Commands::Run"),
+        }
+    }
+
+    #[test]
+    fn test_cli_max_budget_flag() {
+        let args = vec![
+            "traceforge",
+            "run",
+            "--max-budget",
+            "42.0",
+        ];
+
+        let cli = Cli::try_parse_from(args).expect("parse cli args");
+        match cli.command {
+            Commands::Run(run_args) => {
+                assert!((run_args.max_budget - 42.0).abs() < 1e-6);
             }
             _ => panic!("Expected Commands::Run"),
         }
