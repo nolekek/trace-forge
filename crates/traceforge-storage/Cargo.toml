@@ -1,0 +1,21 @@
+[package]
+name = "traceforge-storage"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Embedded trace storage and async telemetry flusher for TraceForge"
+
+[dependencies]
+traceforge-core = { path = "../traceforge-core" }
+tokio = { workspace = true, features = ["sync", "time", "rt", "macros"] }
+rusqlite = { version = "0.32", features = ["bundled", "bundled-full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = "0.1"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+tempfile = "3"

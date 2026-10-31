@@ -13,6 +13,7 @@
 
 pub mod budget_limiter;
 pub mod evaluator;
+pub mod loop_detector;
 pub mod policy_types;
 
 // Flatten primary exports
@@ -23,6 +24,12 @@ pub use budget_limiter::{
 pub use evaluator::{
     EvaluatorError, PolicyEvaluator, WasmEvaluationPayload, WasmPolicyBundle,
     WasmPolicyContract, WasmtimeContractAdapter,
+};
+pub use loop_detector::{
+    cosine_similarity, normalize_json_value, normalize_string, ActionRecord, ActionVectorizer,
+    FeatureHashingVectorizer, LoopDetectionResult, OnnxVectorizerAdapter, SemanticLoopDetector,
+    DEFAULT_CONSECUTIVE_REPEATS_THRESHOLD, DEFAULT_EMBEDDING_DIMENSION,
+    DEFAULT_SIMILARITY_THRESHOLD, DEFAULT_WINDOW_SIZE, RECOVERY_PROMPT,
 };
 pub use policy_types::{
     AgentMetadata, EvaluationDecision, EvaluationResult, PolicyInput, PolicyLimits,
