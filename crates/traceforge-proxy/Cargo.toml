@@ -10,6 +10,7 @@ traceforge-core = { workspace = true }
 traceforge-guard = { workspace = true }
 traceforge-storage = { workspace = true }
 traceforge-hitl = { workspace = true }
+traceforge-ui = { path = "../traceforge-ui" }
 tokio = { workspace = true }
 axum = { workspace = true }
 reqwest = { workspace = true }

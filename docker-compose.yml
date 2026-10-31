@@ -1,0 +1,36 @@
+services:
+  traceforge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: traceforge
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - TRACEFORGE_HOST=0.0.0.0
+      - TRACEFORGE_PORT=8080
+      - TRACEFORGE_UPSTREAM=https://api.openai.com/v1
+      - TRACEFORGE_MAX_BUDGET=10.0
+      - TRACEFORGE_DB_PATH=/app/.traceforge/traces.db
+    volumes:
+      - ./data:/app/.traceforge
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - traceforge-network
+
+networks:
+  traceforge-network:
+    driver: bridge

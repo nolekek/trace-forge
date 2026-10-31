@@ -27,6 +27,7 @@ use traceforge_hitl::{
 };
 use traceforge_storage::AsyncBatchFlusher;
 
+use crate::mcp_interceptor::{McpInspectionResult, McpInterceptor};
 use crate::stream_tee::StreamTee;
 
 /// Real-time proxy metrics and operational counters.
@@ -52,6 +53,7 @@ pub struct ProxyState {
     pub loop_detector: Arc<tokio::sync::Mutex<SemanticLoopDetector>>,
     pub ws_hub: Arc<WsHub>,
     pub breakpoint_manager: Arc<BreakpointManager>,
+    pub mcp_interceptor: Arc<McpInterceptor>,
     pub metrics: Arc<ProxyMetrics>,
     pub start_instant: Instant,
 }
@@ -97,6 +99,11 @@ impl ProxyState {
             ))
         });
 
+        let mcp_interceptor = Arc::new(McpInterceptor::new(
+            policy_evaluator.clone(),
+            breakpoint_manager.clone(),
+        ));
+
         Self {
             config: Arc::new(config),
             client,
@@ -106,6 +113,7 @@ impl ProxyState {
             loop_detector,
             ws_hub,
             breakpoint_manager,
+            mcp_interceptor,
             metrics: Arc::new(ProxyMetrics::default()),
             start_instant: Instant::now(),
         }
@@ -841,3 +849,50 @@ pub async fn fallback_proxy_handler(
         }
     }
 }
+
+/// Route handler for incoming MCP JSON-RPC 2.0 requests over HTTP.
+pub async fn mcp_route_handler(
+    State(state): State<ProxyState>,
+    body: String,
+) -> Response {
+    let result = state.mcp_interceptor.inspect_mcp_request(&body);
+    match result {
+        McpInspectionResult::Blocked { error_response, .. } => {
+            (StatusCode::OK, Json(error_response)).into_response()
+        }
+        McpInspectionResult::InvalidJsonRpc { error_response, .. } => {
+            (StatusCode::BAD_REQUEST, Json(error_response)).into_response()
+        }
+        McpInspectionResult::AwaitingApproval {
+            session_id,
+            tool_name,
+            arguments,
+            reason,
+        } => {
+            let resp = serde_json::json!({
+                "jsonrpc": "2.0",
+                "result": {
+                    "status": "AWAITING_APPROVAL",
+                    "session_id": session_id,
+                    "tool": tool_name,
+                    "arguments": arguments,
+                    "reason": reason,
+                }
+            });
+            (StatusCode::ACCEPTED, Json(resp)).into_response()
+        }
+        McpInspectionResult::Allowed { method, tool_name, params } => {
+            let resp = serde_json::json!({
+                "jsonrpc": "2.0",
+                "result": {
+                    "status": "allowed",
+                    "method": method,
+                    "tool": tool_name,
+                    "params": params,
+                }
+            });
+            (StatusCode::OK, Json(resp)).into_response()
+        }
+    }
+}
+

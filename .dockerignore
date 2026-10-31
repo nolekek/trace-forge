@@ -1,0 +1,44 @@
+# Git & CI/CD
+.git
+.gitignore
+.github
+
+# Rust build artifacts
+target/
+**/*.rs.bk
+*.pdb
+
+# Frontend dependencies and builds
+**/node_modules
+**/.next
+**/out
+**/*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment and sensitive files
+.env*
+*.pem
+*.key
+
+# Runtime data and SQLite/DuckDB databases
+.traceforge
+data/
+*.duckdb*
+*.db
+*.db-shm
+*.db-wal
+*.sqlite*
+
+# Temporary files and logs
+*.log
+*.tmp
+*.temp
+
+# IDE and OS files
+.vscode
+.idea
+.DS_Store
+Thumbs.db

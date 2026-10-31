@@ -18,6 +18,7 @@ traceforge-proxy = { path = "crates/traceforge-proxy" }
 traceforge-guard = { path = "crates/traceforge-guard" }
 traceforge-storage = { path = "crates/traceforge-storage" }
 traceforge-hitl = { path = "crates/traceforge-hitl" }
+traceforge-ui = { path = "crates/traceforge-ui" }
 
 # Async runtime & Networking
 tokio = { version = "1.40", features = ["full"] }

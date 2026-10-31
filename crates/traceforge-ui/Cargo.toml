@@ -1,0 +1,18 @@
+[package]
+name = "traceforge-ui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+rust-embed = "8.5"
+axum = { workspace = true }
+http = "1.1"
+mime_guess = "2.0"
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+tower = { workspace = true }
+http-body-util = { workspace = true }

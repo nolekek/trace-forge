@@ -3,10 +3,12 @@
 //! Sub-millisecond latency reverse proxy for LLM endpoints with zero-copy SSE stream teeing.
 
 pub mod http_proxy;
+pub mod mcp_interceptor;
 pub mod server;
 pub mod stream_tee;
 
 pub use http_proxy::{ProxyMetrics, ProxyState};
+pub use mcp_interceptor::{inspect_mcp_request, McpInspectionResult, McpInterceptor};
 pub use server::ProxyServer;
 pub use stream_tee::{StreamAccumulator, StreamSummary, StreamTee};
 

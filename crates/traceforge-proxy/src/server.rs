@@ -16,8 +16,10 @@ use traceforge_hitl::{BreakpointManager, SessionStateMachine, WsHub};
 use traceforge_storage::AsyncBatchFlusher;
 
 use crate::http_proxy::{
-    chat_completions_handler, fallback_proxy_handler, health_handler, ws_route_handler, ProxyState,
+    chat_completions_handler, fallback_proxy_handler, health_handler, mcp_route_handler,
+    ws_route_handler, ProxyState,
 };
+use crate::mcp_interceptor::McpInterceptor;
 
 /// High-performance reverse proxy HTTP server with safety invariant firewall and HITL control plane.
 pub struct ProxyServer {
@@ -115,6 +117,13 @@ impl ProxyServer {
         self.flusher.as_ref()
     }
 
+    pub fn mcp_interceptor(&self) -> McpInterceptor {
+        McpInterceptor::new(
+            self.policy_evaluator.clone(),
+            self.breakpoint_manager.clone(),
+        )
+    }
+
     /// Construct Axum router configured for reverse proxy, WebSocket control plane, and health endpoints.
     pub fn router(&self) -> Router {
         let state = ProxyState::new(
@@ -136,6 +145,12 @@ impl ProxyServer {
             .route("/v1/chat/completions", post(chat_completions_handler))
             .route("/health", get(health_handler))
             .route("/ws/control", get(ws_route_handler))
+            .route("/mcp", post(mcp_route_handler))
+            .route("/dashboard", get(traceforge_ui::serve_static_asset))
+            .route("/dashboard/", get(traceforge_ui::serve_static_asset))
+            .route("/dashboard/{*path}", get(traceforge_ui::serve_static_asset))
+            .route("/_next/{*path}", get(traceforge_ui::serve_static_asset))
+            .route("/", get(traceforge_ui::serve_static_asset))
             .fallback(fallback_proxy_handler)
             .layer(cors)
             .layer(TraceLayer::new_for_http())
