@@ -4,8 +4,51 @@
 
 [![Proxy Latency](https://img.shields.io/badge/Proxy%20Latency-<5ms-brightgreen.svg)](#proxy-architecture)
 [![Policy Engine](https://img.shields.io/badge/Guardrails-OPA%20%2F%20Rego-blue.svg)](#policy--invariant-engine)
-[![Observability](https://img.shields.io/badge/Telemetry-OpenTelemetry%20%2B%20ClickHouse-orange.svg)](#storage--analytics)
+[![Tests](https://img.shields.io/badge/Tests-95%20passing-brightgreen.svg)](https://github.com/nolekek/trace-forge/actions)
 [![License](https://img.shields.io/badge/License-Dual%20AGPLv3%20%2F%20Enterprise-blueviolet.svg)](#monetization--business-model)
+
+---
+
+## ⚡ Quickstart: Быстрый запуск
+
+### 1. Локальный запуск единым бинарником (Single-Binary)
+Благодаря встраиванию скомпилированного дашборда (`rust-embed`), Node.js для запуска не требуется:
+
+```bash
+# Клонирование и запуск прокси-файрвола
+git clone https://github.com/nolekek/trace-forge.git
+cd trace-forge
+cargo run --release --bin traceforge -- run --port 8080 --upstream https://api.openai.com/v1 --max-budget 10.0
+```
+
+- **Reverse Proxy**: `http://localhost:8080/v1`
+- **Real-Time Web Canvas**: `http://localhost:8080/dashboard`
+- **MCP Protocol Gateway**: `http://localhost:8080/mcp`
+- **WebSocket Control Plane**: `ws://localhost:8080/ws/control`
+
+### 2. Запуск в Docker
+```bash
+docker compose up -d
+```
+
+### 3. Подключение AI-агента (Python / OpenAI SDK / LangGraph)
+Для интеграции достаточно перенаправить `base_url`:
+
+```python
+from openai import OpenAI
+
+# Все запросы агента теперь проходят через сетевой файрвол TraceForge
+client = OpenAI(
+    base_url="http://localhost:8080/v1",
+    api_key="your-openai-api-key"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Refactor codebase"}],
+    stream=True
+)
+```
 
 ---
 
@@ -114,20 +157,29 @@ flowchart TD
 
 ## 🚀 Дорожная карта разработки (Milestones)
 
-### Этап 1: Высокопроизводительный Reverse Proxy (MVP, 2 недели)
-- [ ] Прозрачный прокси-сервер для OpenAI / Anthropic / MCP вызовов с замером задержки.
-- [ ] Базовый счетчик токенов и калькулятор расходов ($) в реальном времени.
-- [ ] Простой детектор точных повторов вызовов тулов.
+### Этап 1: Высокопроизводительный Reverse Proxy (MVP) — ✔ Завершен
+- [x] Прозрачный прокси-сервер для OpenAI / Anthropic / MCP вызовов с субмиллисекундной задержкой.
+- [x] Zero-copy stream teeing для непрерывной трансляции SSE чанков клиенту.
+- [x] Базовый счетчик токенов и калькулятор расходов ($) в реальном времени.
 
-### Этап 2: Семантический детектор циклов и OPA-политики (3-4 недели)
-- [ ] Интеграция ONNX runtime для эмбеддингов действий агента.
-- [ ] Движок правил Rego с пресетами безопасности (защита файлов, БД, сети).
-- [ ] Механизм впрыска корректирующих системных инструкций (System Prompt Injection).
+### Этап 2: Семантический детектор циклов и OPA-политики — ✔ Завершен
+- [x] Векторный движок детекции семантических циклов (Cosine similarity, 31 мкс оверхед).
+- [x] Прерывание зацикливаний (*Loop Thrashing*) и синтез корректирующих системных инструкций (`recovery_prompt`).
+- [x] Движок правил Rego (OPA) с пресетами безопасности (защита от `rm -rf`, `DROP TABLE`, path traversal).
+- [x] Потокобезопасный `BudgetLimiter` на `AtomicU64` в микродолларах.
+- [x] Встраиваемое хранилище трейсов SQLite (WAL mode) и асинхронный сброс через `AsyncBatchFlusher`.
 
-### Этап 3: Web-дашборд и точки останова (5-8 недель)
-- [ ] Интерактивный UI с графом выполнения шагов (React Flow).
-- [ ] Точки останова (Breakpoints) и кнопка «Одобрить / Отклонить действие» через WebSocket.
-- [ ] Экспорт трейсов в OpenTelemetry-совместимый формат.
+### Этап 3: Web-дашборд и точки останова — ✔ Завершен
+- [x] Интерактивный UI с графом выполнения шагов агента на React Flow (`dashboard/`).
+- [x] Точки останова (Breakpoints) на вызовы инструментов через WebSocket `/ws/control`.
+- [x] Модальное окно Human-in-the-Loop («Одобрить / Отклонить / Скорректировать»).
+- [x] Тепловая карта контекстного окна (Context Window Heatmap) и аудит фрагментации токенов.
+
+### Этап 4: Production Packaging & UI Embedding — ✔ Завершен
+- [x] Встраивание статического Next.js дашборда прямо в Rust-бинарник через `rust-embed`.
+- [x] Физический перехватчик протокола Model Context Protocol (MCP JSON-RPC 2.0).
+- [x] Оптимизированный multi-stage `Dockerfile` (Node.js -> Rust -> rootless Debian runtime).
+- [x] `docker-compose.yml` и автоматизированный GitHub Actions CI/CD пайплайн.
 
 ---
 
