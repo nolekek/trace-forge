@@ -1,0 +1,17 @@
+[package]
+name = "traceforge-guard"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+traceforge-core = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+regex = "1.11"
+
+[dev-dependencies]
+tokio = { workspace = true }

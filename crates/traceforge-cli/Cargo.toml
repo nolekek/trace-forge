@@ -1,0 +1,21 @@
+[package]
+name = "traceforge-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "traceforge"
+path = "src/main.rs"
+
+[dependencies]
+traceforge-core = { workspace = true }
+traceforge-proxy = { workspace = true }
+tokio = { workspace = true }
+clap = { workspace = true }
+reqwest = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
